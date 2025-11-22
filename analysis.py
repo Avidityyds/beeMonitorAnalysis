@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import timedelta
 
 import pandas as pd
 import matplotlib
@@ -73,35 +74,109 @@ def filter_by_day_range(df: pd.DataFrame, day_start: int, day_end: int) -> pd.Da
     return dff
 
 
+def _shade_alternating_days(ax, dff: pd.DataFrame):
+    """
+    Shade every other day with light gray background.
+
+    First day = white, second day = gray, third = white, ...
+    """
+    if dff.empty:
+        return
+
+    # Normalize to midnight for start/end
+    start_day = dff["dt"].min().normalize()
+    end_day = dff["dt"].max().normalize()
+    days = (end_day - start_day).days + 1
+
+    for i in range(days):
+        day_start = start_day + timedelta(days=i)
+        day_end = day_start + timedelta(days=1)
+        # shade "odd index" days -> 2nd, 4th, 6th ...
+        if i % 2 == 1:
+            ax.axvspan(day_start, day_end, color="lightgray", alpha=0.5, zorder=0)
+
+
 def plot_inout_window(dff: pd.DataFrame, day_label: str):
-    """Plot bee in/out counts with 6-hour x-axis ticks."""
+    """Plot bee in/out counts with 6-hour x-axis ticks and alternating day background."""
     if dff.empty:
         print(f"[WARN] inout {day_label} no data, skip")
         return
 
-    fig, ax = plt.subplots(figsize=(12, 6))
+    # 比較寬，避免 X 標籤擠在一起
+    fig, ax = plt.subplots(figsize=(18, 6))
+
+    # 底色交錯
+    _shade_alternating_days(ax, dff)
 
     # Worker bees
-    ax.plot(dff["dt"], dff["in_worker"], label="Worker IN (in_worker)", color="tab:blue", linewidth=1.5)
-    ax.plot(dff["dt"], dff["out_worker"], label="Worker OUT (out_worker)", color="tab:blue", linestyle="--", linewidth=1.5)
+    ax.plot(
+        dff["dt"],
+        dff["in_worker"],
+        label="Worker IN (in_worker)",
+        color="tab:blue",
+        linewidth=1.0,
+        zorder=5,
+    )
+    ax.plot(
+        dff["dt"],
+        dff["out_worker"],
+        label="Worker OUT (out_worker)",
+        color="tab:blue",
+        linestyle="--",
+        linewidth=1.0,
+        zorder=5,
+    )
 
     # Pollen workers
-    ax.plot(dff["dt"], dff["in_pollen"], label="Pollen worker IN (in_pollen)", color="orange", linewidth=1.5)
-    ax.plot(dff["dt"], dff["out_pollen"], label="Pollen worker OUT (out_pollen)", color="orange", linestyle="--", linewidth=1.5)
+    ax.plot(
+        dff["dt"],
+        dff["in_pollen"],
+        label="Pollen worker IN (in_pollen)",
+        color="orange",
+        linewidth=1.0,
+        zorder=5,
+    )
+    ax.plot(
+        dff["dt"],
+        dff["out_pollen"],
+        label="Pollen worker OUT (out_pollen)",
+        color="orange",
+        linestyle="--",
+        linewidth=1.0,
+        zorder=5,
+    )
 
     # Drones
-    ax.plot(dff["dt"], dff["in_drone"], label="Drone IN (in_drone)", color="red", linewidth=1.5)
-    ax.plot(dff["dt"], dff["out_drone"], label="Drone OUT (out_drone)", color="red", linestyle="--", linewidth=1.5)
+    ax.plot(
+        dff["dt"],
+        dff["in_drone"],
+        label="Drone IN (in_drone)",
+        color="red",
+        linewidth=1.0,
+        zorder=5,
+    )
+    ax.plot(
+        dff["dt"],
+        dff["out_drone"],
+        label="Drone OUT (out_drone)",
+        color="red",
+        linestyle="--",
+        linewidth=1.0,
+        zorder=5,
+    )
 
     ax.set_title(f"{day_label} day window: Bee in/out counts")
     ax.set_xlabel("Time (24-hour)")
     ax.set_ylabel("Count")
     ax.legend(loc="upper right", fontsize=9)
-    ax.grid(True, alpha=0.3)
+    ax.grid(True, alpha=0.3, zorder=1)
 
     # --- 6-hour ticks ---
     ax.xaxis.set_major_locator(HourLocator(interval=6))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d\n%H:%M"))
+
+    # 旋轉標籤避免擠在一起
+    plt.setp(ax.get_xticklabels(), rotation=60, ha="right")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = OUT_DIR / f"inout_{day_label}.png"
@@ -113,30 +188,36 @@ def plot_inout_window(dff: pd.DataFrame, day_label: str):
 
 
 def plot_pollen_window(dff: pd.DataFrame, day_label: str):
-    """Plot pollen ratio with 6-hour x-axis ticks."""
+    """Plot pollen ratio with 6-hour x-axis ticks and alternating day background."""
     if dff.empty:
         print(f"[WARN] pollen {day_label} no data, skip")
         return
 
-    fig, ax = plt.subplots(figsize=(12, 4))
+    fig, ax = plt.subplots(figsize=(18, 4))
+
+    # 底色交錯
+    _shade_alternating_days(ax, dff)
 
     ax.plot(
         dff["dt"],
         dff["pollen_rate"].astype(float),
         label="Pollen ratio",
         color="green",
-        linewidth=1.5,
+        linewidth=1.0,
+        zorder=5,
     )
 
     ax.set_title(f"{day_label} day window: Pollen ratio")
     ax.set_xlabel("Time (24-hour)")
     ax.set_ylabel("Pollen ratio")
-    ax.grid(True, alpha=0.3)
+    ax.grid(True, alpha=0.3, zorder=1)
     ax.legend(loc="upper right")
 
     # --- 6-hour ticks ---
     ax.xaxis.set_major_locator(HourLocator(interval=6))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d\n%H:%M"))
+
+    plt.setp(ax.get_xticklabels(), rotation=60, ha="right")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = OUT_DIR / f"pollen_{day_label}.png"
