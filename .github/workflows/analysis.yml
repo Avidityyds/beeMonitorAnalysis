@@ -3,7 +3,7 @@ name: scheduled-analysis
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 0 * * *"   # 每天執行一次
+    - cron: "0 0 * * *"   # 每天執行一次（UTC）
 
 jobs:
   run-analysis:
@@ -23,16 +23,23 @@ jobs:
       - name: Run analysis
         run: python analysis.py
 
+      # 將檔案改名成帶日期版本
       - name: Rename file with date
         run: |
           DATE=$(date +'%Y-%m-%d')
           mv output/result.csv output/result_$DATE.csv
 
+      # 刪除超過 30 天的舊檔案
+      - name: Delete files older than 30 days
+        run: |
+          find output -name "result_*.csv" -type f -mtime +30 -print -delete
+
+      # Commit 並 push
       - name: Commit and push CSV
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
           git add output/
-          git commit -m "Add result for $(date +'%Y-%m-%d')" || echo "No changes to commit"
+          git commit -m "Auto update CSV files" || echo "No changes to commit"
           git push
