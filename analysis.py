@@ -2,28 +2,26 @@ from pathlib import Path
 
 import pandas as pd
 import matplotlib
-matplotlib.use("Agg")  # for GitHub Actions / 沒有螢幕的環境用
+matplotlib.use("Agg")  # for environments without display
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from matplotlib.dates import HourLocator
 
 DATA_DIR = Path("data")
 OUT_DIR = Path("output")
 
-# 期望的欄位：
-# dt, in_worker, out_worker, in_pollen, out_pollen, in_drone, out_drone, pollen_rate
-
 
 def load_latest_month_csv() -> pd.DataFrame:
-    """從 data/ 底下找最新一個 *_TX2_6_inout.csv，讀進 DataFrame。"""
+    """Load the latest *_TX2_6_inout.csv file from data/ folder."""
     files = sorted(DATA_DIR.glob("*_TX2_6_inout.csv"))
     if not files:
-        raise FileNotFoundError("data/ 資料夾內找不到任何 *_TX2_6_inout.csv 檔案")
+        raise FileNotFoundError("No *_TX2_6_inout.csv found in data/")
 
     csv_path = files[-1]
     print(f"[INFO] Using input file: {csv_path}")
     df = pd.read_csv(csv_path)
 
-    # 有些版本欄位可能是 inpollen / outpollen
+    # Handle alternative column names
     rename_map = {}
     if "inpollen" in df.columns:
         rename_map["inpollen"] = "in_pollen"
@@ -37,23 +35,19 @@ def load_latest_month_csv() -> pd.DataFrame:
         'in_pollen', 'out_pollen',
         'in_drone', 'out_drone'
     ]
-    
+
     missing = [c for c in need_cols if c not in df.columns]
     if missing:
-        raise ValueError(f"CSV 缺少必要欄位: {missing}")
-    
-    # 如果沒有 pollen_rate，自動計算
+        raise ValueError(f"Missing required columns: {missing}")
+
+    # Auto-calculate pollen_rate if missing
     if 'pollen_rate' not in df.columns:
-        print("[INFO] CSV 沒有 pollen_rate，開始自動計算...")
-    
+        print("[INFO] pollen_rate not found, calculating automatically...")
         total_in = df['in_worker'] + df['in_pollen'] + df['in_drone']
         pollen_in = df['in_pollen']
-    
-        # 避免除以 0
         df['pollen_rate'] = pollen_in / total_in.replace(0, pd.NA)
 
-
-    # 解析時間欄位 dt
+    # Parse datetime
     for fmt in (None, "%Y/%m/%d %H:%M", "%Y-%m-%d %H:%M"):
         try:
             if fmt is None:
@@ -66,101 +60,52 @@ def load_latest_month_csv() -> pd.DataFrame:
         except Exception:
             continue
     else:
-        raise ValueError("無法解析 dt 欄位的時間格式")
+        raise ValueError("Cannot parse dt datetime format")
 
     df = df.sort_values("dt").reset_index(drop=True)
     return df
 
 
-def setup_chinese_font():
-    """盡量設定中文字型（失敗就算了，不影響程式跑）。"""
-    try:
-        matplotlib.rc("font", family="Arial Unicode Ms")
-    except Exception:
-        pass
-
-
 def filter_by_day_range(df: pd.DataFrame, day_start: int, day_end: int) -> pd.DataFrame:
-    """根據日期中的 day 篩選資料，例如 1–10 號。"""
+    """Filter data by day-of-month range, e.g., day 1–10."""
     dff = df[(df["dt"].dt.day >= day_start) & (df["dt"].dt.day <= day_end)].copy()
     print(f"[INFO] Day {day_start:02d}-{day_end:02d}: {len(dff)} rows")
     return dff
 
 
 def plot_inout_window(dff: pd.DataFrame, day_label: str):
-    """畫進出量 6 條線，儲存成 inout_<label>.png。"""
+    """Plot bee in/out counts with 6-hour x-axis ticks."""
     if dff.empty:
-        print(f"[WARN] inout {day_label} 沒有資料，略過畫圖")
+        print(f"[WARN] inout {day_label} no data, skip")
         return
-
-    setup_chinese_font()
 
     fig, ax = plt.subplots(figsize=(12, 6))
 
-    # 工蜂：藍色
-    ax.plot(
-        dff["dt"],
-        dff["in_worker"],
-        label="工蜂進巢 (in_worker)",
-        color="tab:blue",
-        linewidth=1.5,
-    )
-    ax.plot(
-        dff["dt"],
-        dff["out_worker"],
-        label="工蜂出巢 (out_worker)",
-        color="tab:blue",
-        linestyle="--",
-        linewidth=1.5,
-    )
+    # Worker bees
+    ax.plot(dff["dt"], dff["in_worker"], label="Worker IN (in_worker)", color="tab:blue", linewidth=1.5)
+    ax.plot(dff["dt"], dff["out_worker"], label="Worker OUT (out_worker)", color="tab:blue", linestyle="--", linewidth=1.5)
 
-    # 花粉工蜂：橘色
-    ax.plot(
-        dff["dt"],
-        dff["in_pollen"],
-        label="花粉工蜂進巢 (in_pollen)",
-        color="orange",
-        linewidth=1.5,
-    )
-    ax.plot(
-        dff["dt"],
-        dff["out_pollen"],
-        label="花粉工蜂出巢 (out_pollen)",
-        color="orange",
-        linestyle="--",
-        linewidth=1.5,
-    )
+    # Pollen workers
+    ax.plot(dff["dt"], dff["in_pollen"], label="Pollen worker IN (in_pollen)", color="orange", linewidth=1.5)
+    ax.plot(dff["dt"], dff["out_pollen"], label="Pollen worker OUT (out_pollen)", color="orange", linestyle="--", linewidth=1.5)
 
-    # 雄蜂：紅色
-    ax.plot(
-        dff["dt"],
-        dff["in_drone"],
-        label="雄蜂進巢 (in_drone)",
-        color="red",
-        linewidth=1.5,
-    )
-    ax.plot(
-        dff["dt"],
-        dff["out_drone"],
-        label="雄蜂出巢 (out_drone)",
-        color="red",
-        linestyle="--",
-        linewidth=1.5,
-    )
+    # Drones
+    ax.plot(dff["dt"], dff["in_drone"], label="Drone IN (in_drone)", color="red", linewidth=1.5)
+    ax.plot(dff["dt"], dff["out_drone"], label="Drone OUT (out_drone)", color="red", linestyle="--", linewidth=1.5)
 
-    ax.set_title(f"{day_label} 日區間：各類蜜蜂進出量")
-    ax.set_xlabel("時間")
-    ax.set_ylabel("數量")
+    ax.set_title(f"{day_label} day window: Bee in/out counts")
+    ax.set_xlabel("Time (24-hour)")
+    ax.set_ylabel("Count")
     ax.legend(loc="upper right", fontsize=9)
     ax.grid(True, alpha=0.3)
 
-    # X 軸用日期＋時間
-    ax.xaxis.set_major_locator(mdates.AutoDateLocator())
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d\n%H:%M"))
-    plt.setp(ax.get_xticklabels(), rotation=0)
+    # --- 6-hour ticks ---
+    ax.xaxis.set_major_locator(HourLocator(interval=6))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d\n%H:%M"))
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = OUT_DIR / f"inout_{day_label}.png"
+
     plt.tight_layout()
     plt.savefig(out_path, dpi=220, bbox_inches="tight")
     plt.close(fig)
@@ -168,35 +113,34 @@ def plot_inout_window(dff: pd.DataFrame, day_label: str):
 
 
 def plot_pollen_window(dff: pd.DataFrame, day_label: str):
-    """畫花粉率折線圖，儲存成 pollen_<label>.png。"""
+    """Plot pollen ratio with 6-hour x-axis ticks."""
     if dff.empty:
-        print(f"[WARN] pollen {day_label} 沒有資料，略過畫圖")
+        print(f"[WARN] pollen {day_label} no data, skip")
         return
-
-    setup_chinese_font()
 
     fig, ax = plt.subplots(figsize=(12, 4))
 
     ax.plot(
         dff["dt"],
         dff["pollen_rate"].astype(float),
-        label="花粉率",
+        label="Pollen ratio",
         color="green",
         linewidth=1.5,
     )
 
-    ax.set_title(f"{day_label} 日區間：花粉率變化")
-    ax.set_xlabel("時間")
-    ax.set_ylabel("花粉率")
+    ax.set_title(f"{day_label} day window: Pollen ratio")
+    ax.set_xlabel("Time (24-hour)")
+    ax.set_ylabel("Pollen ratio")
     ax.grid(True, alpha=0.3)
     ax.legend(loc="upper right")
 
-    ax.xaxis.set_major_locator(mdates.AutoDateLocator())
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d\n%H:%M"))
-    plt.setp(ax.get_xticklabels(), rotation=0)
+    # --- 6-hour ticks ---
+    ax.xaxis.set_major_locator(HourLocator(interval=6))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d\n%H:%M"))
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = OUT_DIR / f"pollen_{day_label}.png"
+
     plt.tight_layout()
     plt.savefig(out_path, dpi=220, bbox_inches="tight")
     plt.close(fig)
@@ -204,12 +148,13 @@ def plot_pollen_window(dff: pd.DataFrame, day_label: str):
 
 
 def main():
-    print("[INFO] Start monthly window analysis...")
+    print("[INFO] Start 10-day window analysis...")
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     df = load_latest_month_csv()
 
-    # 取出這個月的最後一天 (28 / 30 / 31)
+    # Get last day of this month
     last_day = df["dt"].dt.day.max()
 
     windows = [
@@ -217,7 +162,6 @@ def main():
         (11, 20, "11-20"),
         (21, last_day, f"21-{last_day:02d}"),
     ]
-
 
     for day_start, day_end, label in windows:
         dff = filter_by_day_range(df, day_start, day_end)
