@@ -3,7 +3,7 @@ name: scheduled-analysis
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 16 * * *"   # 每天台灣時間 00:00 執行（換算為UTC 16:00）
+    - cron: "0 16 * * *"   # 每天台灣時間 00:00（換算為UTC 16:00）
 
 jobs:
   run-analysis:
@@ -17,21 +17,32 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install deps
+      - name: Install dependencies
         run: pip install -r requirements.txt
 
       - name: Run analysis
         run: python analysis.py
 
+      # 檔名加上台灣日期
       - name: Rename file with date (UTC+8)
         run: |
           DATE=$(TZ='Asia/Taipei' date +'%Y-%m-%d')
           mv output/result.csv output/result_$DATE.csv
 
+      # 上傳到 Google Drive（Service Account 自己建立/使用資料夾）
+      - name: Upload result to Google Drive
+        env:
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          DATE=$(TZ='Asia/Taipei' date +'%Y-%m-%d')
+          python upload_to_drive.py "output/result_${DATE}.csv" "result_${DATE}.csv"
+
+      # 刪除 30 天前的舊檔
       - name: Delete files older than 30 days
         run: |
           find output -name "result_*.csv" -type f -mtime +30 -print -delete
 
+      # Commit 並 push 回 repo
       - name: Commit and push CSV
         run: |
           git config --global user.name "github-actions[bot]"
