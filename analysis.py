@@ -33,17 +33,16 @@ def load_latest_month_csv() -> pd.DataFrame:
         df = df.rename(columns=rename_map)
 
     need_cols = [
-        "dt",
-        "in_worker", "out_worker",
-        "in_pollen", "out_pollen",
-        "in_drone", "out_drone",
-        "pollen_rate",
+        'dt', 'in_worker', 'out_worker',
+        'in_pollen', 'out_pollen',
+        'in_drone', 'out_drone'
     ]
+    
     missing = [c for c in need_cols if c not in df.columns]
     if missing:
-        raise ValueError(f"CSV 缺少欄位：{missing}\n期待欄位：{need_cols}")
+        raise ValueError(f"CSV 缺少必要欄位: {missing}")
     
-    # 如果沒有 pollen_rate，就自動計算
+    # 如果沒有 pollen_rate，自動計算
     if 'pollen_rate' not in df.columns:
         print("[INFO] CSV 沒有 pollen_rate，開始自動計算...")
     
@@ -52,6 +51,7 @@ def load_latest_month_csv() -> pd.DataFrame:
     
         # 避免除以 0
         df['pollen_rate'] = pollen_in / total_in.replace(0, pd.NA)
+
 
     # 解析時間欄位 dt
     for fmt in (None, "%Y/%m/%d %H:%M", "%Y-%m-%d %H:%M"):
