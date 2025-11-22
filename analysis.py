@@ -43,6 +43,10 @@ def load_latest_month_csv() -> pd.DataFrame:
     if missing:
         raise ValueError(f"CSV 缺少欄位：{missing}\n期待欄位：{need_cols}")
 
+    # 如果 pollen_rate 不存在就自動計算
+    if 'pollen_rate' not in df.columns:
+        df['pollen_rate'] = df['in_pollen'] / (df['in_worker'] + 1)
+
     # 解析時間欄位 dt
     for fmt in (None, "%Y/%m/%d %H:%M", "%Y-%m-%d %H:%M"):
         try:
