@@ -3,7 +3,7 @@ name: scheduled-analysis
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 * * * *"  # per hour
+    - cron: "0 * * * *"   # 每小時一次（UTC 00:00）
 
 jobs:
   run-analysis:
@@ -23,8 +23,20 @@ jobs:
       - name: Run analysis
         run: python analysis.py
 
+      # 將 CSV 上傳成短期 Artifact（3 天後自動刪除）
       - name: Upload result CSV
         uses: actions/upload-artifact@v4
         with:
           name: analysis-result
           path: output/result.csv
+          retention-days: 3
+
+      # 存回 GitHub Repo（永久保存）
+      - name: Commit and push result.csv
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add output/result.csv
+          git commit -m "Update result.csv (auto)" || echo "No changes to commit"
+          git push
