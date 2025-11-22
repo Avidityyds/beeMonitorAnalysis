@@ -3,7 +3,7 @@ name: scheduled-analysis
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 * * * *"
+    - cron: "0 * * * *"  # per hour
 
 jobs:
   run-analysis:
@@ -22,3 +22,9 @@ jobs:
 
       - name: Run analysis
         run: python analysis.py
+
+      - name: Upload result CSV
+        uses: actions/upload-artifact@v4
+        with:
+          name: analysis-result
+          path: output/result.csv
