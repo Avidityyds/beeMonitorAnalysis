@@ -29,14 +29,6 @@ jobs:
           DATE=$(TZ='Asia/Taipei' date +'%Y-%m-%d')
           mv output/result.csv output/result_$DATE.csv
 
-      # 上傳到 Google Drive（Service Account 自己建立/使用資料夾）
-      - name: Upload result to Google Drive
-        env:
-          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
-        run: |
-          DATE=$(TZ='Asia/Taipei' date +'%Y-%m-%d')
-          python upload_to_drive.py "output/result_${DATE}.csv" "result_${DATE}.csv"
-
       # 刪除 30 天前的舊檔
       - name: Delete files older than 30 days
         run: |
